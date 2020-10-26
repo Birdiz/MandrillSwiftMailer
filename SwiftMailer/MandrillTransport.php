@@ -367,10 +367,10 @@ class MandrillTransport implements Swift_Transport
             if ($header->getFieldType() === Swift_Mime_Header::TYPE_TEXT) {
                 switch ($header->getFieldName()) {
                     case 'X-MC-GlobalMergeVars':
-                        $mandrillMessage['global_merge_vars'] = $header->getValue();
+                        $mandrillMessage['global_merge_vars'] = json_decode($header->getValue());
                         break;
                     case 'X-MC-MergeVars':
-                        $mandrillMessage['merge_vars'] = $header->getValue();
+                        $mandrillMessage['merge_vars'] = json_decode($header->getValue());
                         break;
                     case 'List-Unsubscribe':
                         $headers['List-Unsubscribe'] = $header->getValue();
