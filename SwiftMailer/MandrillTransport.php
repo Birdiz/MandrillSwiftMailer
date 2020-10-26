@@ -4,40 +4,41 @@ namespace Accord\MandrillSwiftMailer\SwiftMailer;
 
 use Mandrill;
 
+use ReflectionClass;
+use ReflectionException;
 use \Swift_Events_EventDispatcher;
 use \Swift_Events_EventListener;
 use \Swift_Events_SendEvent;
+use Swift_Image;
+use Swift_Mime_Header;
 use \Swift_Mime_SimpleMessage;
+use Swift_SwiftException;
 use \Swift_Transport;
 use \Swift_Attachment;
 use \Swift_MimePart;
+use Swift_TransportException;
 
+/**
+ * Class MandrillTransport
+ *
+ * @package Accord\MandrillSwiftMailer\SwiftMailer
+ */
 class MandrillTransport implements Swift_Transport
 {
 
-    /**
-     * @type Swift_Events_EventDispatcher
-     */
+    /** @type Swift_Events_EventDispatcher */
     protected $dispatcher;
 
-    /**
-     * @var string|null
-     */
+    /** @var string|null */
     protected $apiKey;
 
-    /**
-     * @var bool|null
-     */
+    /** @var bool|null */
     protected $async;
 
-    /**
-     * @var array|null
-     */
+    /** @var array|null */
     protected $resultApi;
 
-    /**
-     * @var string|null
-     */
+    /** @var string|null */
     protected $subAccount;
 
     /**
@@ -46,9 +47,6 @@ class MandrillTransport implements Swift_Transport
     public function __construct(Swift_Events_EventDispatcher $dispatcher)
     {
         $this->dispatcher = $dispatcher;
-        $this->apiKey = null;
-        $this->async = null;
-        $this->subAccount = null;
     }
 
     /**
@@ -81,37 +79,39 @@ class MandrillTransport implements Swift_Transport
     }
 
     /**
-     * @param string $apiKey
+     * @param null|string $apiKey
      * @return $this
      */
-    public function setApiKey($apiKey)
+    public function setApiKey(string $apiKey): self
     {
         $this->apiKey = $apiKey;
+
         return $this;
     }
 
     /**
      * @return null|string
      */
-    public function getApiKey()
+    public function getApiKey(): ?string
     {
         return $this->apiKey;
     }
 
     /**
-     * @param bool $async
+     * @param null|bool $async
      * @return $this
      */
-    public function setAsync($async)
+    public function setAsync(?bool $async): self
     {
         $this->async = $async;
+
         return $this;
     }
 
     /**
      * @return null|bool
      */
-    public function getAsync()
+    public function getAsync(): ?bool
     {
         return $this->async;
     }
@@ -121,42 +121,47 @@ class MandrillTransport implements Swift_Transport
      * @param null|string $subAccount
      * @return $this
      */
-    public function setSubAccount($subAccount)
+    public function setSubAccount(?string $subAccount): self
     {
         $this->subAccount = $subAccount;
+
         return $this;
     }
 
     /**
      * @return null|string
      */
-    public function getSubAccount()
+    public function getSubAccount(): ?string
     {
         return $this->subAccount;
     }
 
     /**
      * @return Mandrill
-     * @throws \Swift_TransportException
+     * @throws Swift_TransportException
      */
-    protected function createMandrill()
+    protected function createMandrill(): Mandrill
     {
         if ($this->apiKey === null) {
-            throw new \Swift_TransportException('Cannot create instance of \Mandrill while API key is NULL');
+            throw new Swift_TransportException('Cannot create instance of \Mandrill while API key is NULL');
         }
+
         return new Mandrill($this->apiKey);
     }
 
     /**
      * @param Swift_Mime_SimpleMessage $message
-     * @param null $failedRecipients
+     * @param array|null $failedRecipients
      * @return int Number of messages sent
+     * @throws ReflectionException
      */
-    public function send(Swift_Mime_SimpleMessage $message, &$failedRecipients = null)
+    public function send(Swift_Mime_SimpleMessage $message, array &$failedRecipients = null)
     {
         $this->resultApi = null;
+
         if ($event = $this->dispatcher->createSendEvent($this, $message)) {
             $this->dispatcher->dispatchEvent($event, 'beforeSendPerformed');
+
             if ($event->bubbleCancelled()) {
                 return 0;
             }
@@ -179,11 +184,9 @@ class MandrillTransport implements Swift_Transport
         }
 
         if ($event) {
-            if ($sendCount > 0) {
-                $event->setResult(Swift_Events_SendEvent::RESULT_SUCCESS);
-            } else {
-                $event->setResult(Swift_Events_SendEvent::RESULT_FAILED);
-            }
+            $event->setResult(
+                $sendCount > 0 ? Swift_Events_SendEvent::RESULT_SUCCESS : Swift_Events_SendEvent::RESULT_FAILED
+            );
 
             $this->dispatcher->dispatchEvent($event, 'sendPerformed');
         }
@@ -194,7 +197,7 @@ class MandrillTransport implements Swift_Transport
     /**
      * @param Swift_Events_EventListener $plugin
      */
-    public function registerPlugin(Swift_Events_EventListener $plugin)
+    public function registerPlugin(Swift_Events_EventListener $plugin): void
     {
         $this->dispatcher->bindEventListener($plugin);
     }
@@ -202,7 +205,7 @@ class MandrillTransport implements Swift_Transport
     /**
      * @return array
      */
-    protected function getSupportedContentTypes()
+    protected function getSupportedContentTypes(): array
     {
         return array(
             'text/plain',
@@ -214,7 +217,7 @@ class MandrillTransport implements Swift_Transport
      * @param string $contentType
      * @return bool
      */
-    protected function supportsContentType($contentType)
+    protected function supportsContentType($contentType): bool
     {
         return in_array($contentType, $this->getSupportedContentTypes());
     }
@@ -222,6 +225,7 @@ class MandrillTransport implements Swift_Transport
     /**
      * @param Swift_Mime_SimpleMessage $message
      * @return string
+     * @throws ReflectionException
      */
     protected function getMessagePrimaryContentType(Swift_Mime_SimpleMessage $message)
     {
@@ -234,7 +238,7 @@ class MandrillTransport implements Swift_Transport
         // SwiftMailer hides the content type set in the constructor of Swift_Mime_SimpleMessage as soon
         // as you add another part to the message. We need to access the protected property
         // userContentType to get the original type.
-        $messageRef = new \ReflectionClass($message);
+        $messageRef = new ReflectionClass($message);
         if ($messageRef->hasProperty('userContentType')) {
             $propRef = $messageRef->getProperty('userContentType');
             $propRef->setAccessible(true);
@@ -249,25 +253,19 @@ class MandrillTransport implements Swift_Transport
      *
      * @param Swift_Mime_SimpleMessage $message
      * @return array Mandrill Send Message
-     * @throws \Swift_SwiftException
+     * @throws Swift_SwiftException
+     * @throws ReflectionException
      */
     public function getMandrillMessage(Swift_Mime_SimpleMessage $message)
     {
         $contentType = $this->getMessagePrimaryContentType($message);
-
-        $fromAddresses = $message->getFrom();
-        $fromEmails = array_keys($fromAddresses);
 
         $toAddresses = $message->getTo();
         $ccAddresses = $message->getCc() ? $message->getCc() : [];
         $bccAddresses = $message->getBcc() ? $message->getBcc() : [];
         $replyToAddresses = $message->getReplyTo() ? $message->getReplyTo() : [];
 
-        $to = array();
-        $attachments = array();
-        $images = array();
-        $headers = array();
-        $tags = array();
+        $to = $attachments = $images = $headers = $tags = $globalMergeVars = $mergeVars = [];
 
         foreach ($toAddresses as $toEmail => $toName) {
             $to[] = array(
@@ -278,11 +276,7 @@ class MandrillTransport implements Swift_Transport
         }
 
         foreach ($replyToAddresses as $replyToEmail => $replyToName) {
-            if ($replyToName) {
-                $headers['Reply-To'] = sprintf('%s <%s>', $replyToEmail, $replyToName);
-            } else {
-                $headers['Reply-To'] = $replyToEmail;
-            }
+            $headers['Reply-To'] = $replyToName ? sprintf('%s <%s>', $replyToEmail, $replyToName) : $replyToEmail;
         }
 
         foreach ($ccAddresses as $ccEmail => $ccName) {
@@ -303,37 +297,51 @@ class MandrillTransport implements Swift_Transport
 
         $bodyHtml = $bodyText = null;
 
-        if ($contentType === 'text/plain') {
-            $bodyText = $message->getBody();
-        } elseif ($contentType === 'text/html') {
-            $bodyHtml = $message->getBody();
-        } else {
-            $bodyHtml = $message->getBody();
+        switch ($contentType) {
+            case 'text/plain':
+                $bodyText = $message->getBody();
+                break;
+            case 'text/html':
+                $bodyHtml = $message->getBody();
+                break;
+            default:
+                $bodyHtml = $message->getBody();
         }
 
         foreach ($message->getChildren() as $child) {
-            if ($child instanceof \Swift_Image) {
+            if ($child instanceof Swift_Image) {
                 $images[] = array(
                     'type'    => $child->getContentType(),
                     'name'    => $child->getId(),
                     'content' => base64_encode($child->getBody()),
                 );
-            } elseif ($child instanceof Swift_Attachment && ! ($child instanceof \Swift_Image)) {
+
+                continue;
+            }
+            if ($child instanceof Swift_Attachment && ! ($child instanceof Swift_Image)) {
                 $attachments[] = array(
                     'type'    => $child->getContentType(),
                     'name'    => $child->getFilename(),
                     'content' => base64_encode($child->getBody())
                 );
-            } elseif ($child instanceof Swift_MimePart && $this->supportsContentType($child->getContentType())) {
-                if ($child->getContentType() == "text/html") {
+
+                continue;
+            }
+            if ($child instanceof Swift_MimePart && $this->supportsContentType($child->getContentType())) {
+                if ($child->getContentType() == 'text/html') {
                     $bodyHtml = $child->getBody();
-                } elseif ($child->getContentType() == "text/plain") {
+                } elseif ($child->getContentType() == 'text/plain') {
                     $bodyText = $child->getBody();
                 }
+
+                continue;
             }
         }
 
-        $mandrillMessage = array(
+        $fromAddresses = $message->getFrom();
+        $fromEmails = array_keys($fromAddresses);
+
+        $mandrillMessage = [
             'html'       => $bodyHtml,
             'text'       => $bodyText,
             'subject'    => $message->getSubject(),
@@ -342,8 +350,10 @@ class MandrillTransport implements Swift_Transport
             'to'         => $to,
             'headers'    => $headers,
             'tags'       => $tags,
-            'inline_css' => null
-        );
+            'inline_css' => null,
+            'global_merge_vars' => $globalMergeVars,
+            'merge_vars' => $mergeVars,
+        ];
 
         if (count($attachments) > 0) {
             $mandrillMessage['attachments'] = $attachments;
@@ -354,8 +364,14 @@ class MandrillTransport implements Swift_Transport
         }
 
         foreach ($message->getHeaders()->getAll() as $header) {
-            if ($header->getFieldType() === \Swift_Mime_Header::TYPE_TEXT) {
+            if ($header->getFieldType() === Swift_Mime_Header::TYPE_TEXT) {
                 switch ($header->getFieldName()) {
+                    case 'X-MC-GlobalMergeVars':
+                        $mandrillMessage['global_merge_vars'] = $header->getValue();
+                        break;
+                    case 'X-MC-MergeVars':
+                        $mandrillMessage['merge_vars'] = $header->getValue();
+                        break;
                     case 'List-Unsubscribe':
                         $headers['List-Unsubscribe'] = $header->getValue();
                         $mandrillMessage['headers'] = $headers;
@@ -411,7 +427,7 @@ class MandrillTransport implements Swift_Transport
     /**
      * @return null|array
      */
-    public function getResultApi()
+    public function getResultApi(): ?array
     {
         return $this->resultApi;
     }
