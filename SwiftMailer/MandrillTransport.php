@@ -151,11 +151,11 @@ class MandrillTransport implements Swift_Transport
 
     /**
      * @param Swift_Mime_SimpleMessage $message
-     * @param array|null $failedRecipients
+     * @param null $failedRecipients
      * @return int Number of messages sent
      * @throws ReflectionException
      */
-    public function send(Swift_Mime_SimpleMessage $message, array &$failedRecipients = null)
+    public function send(Swift_Mime_SimpleMessage $message, &$failedRecipients = null)
     {
         $this->resultApi = null;
 
