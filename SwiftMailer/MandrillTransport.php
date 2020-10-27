@@ -25,7 +25,6 @@ use Swift_TransportException;
  */
 class MandrillTransport implements Swift_Transport
 {
-
     /** @type Swift_Events_EventDispatcher */
     protected $dispatcher;
 
@@ -255,6 +254,7 @@ class MandrillTransport implements Swift_Transport
      * @return array Mandrill Send Message
      * @throws Swift_SwiftException
      * @throws ReflectionException
+     * @throws Swift_TransportException
      */
     public function getMandrillMessage(Swift_Mime_SimpleMessage $message)
     {
@@ -367,10 +367,10 @@ class MandrillTransport implements Swift_Transport
             if ($header->getFieldType() === Swift_Mime_Header::TYPE_TEXT) {
                 switch ($header->getFieldName()) {
                     case 'X-MC-GlobalMergeVars':
-                        $mandrillMessage['global_merge_vars'] = json_decode($header->getValue());
+                        $mandrillMessage['global_merge_vars'] = json_decode($header->getValue(), true);
                         break;
                     case 'X-MC-MergeVars':
-                        $mandrillMessage['merge_vars'] = json_decode($header->getValue());
+                        $mandrillMessage['merge_vars'] = json_decode($header->getValue(), true);
                         break;
                     case 'List-Unsubscribe':
                         $headers['List-Unsubscribe'] = $header->getValue();
